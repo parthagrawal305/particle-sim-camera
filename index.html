@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amphora Particle System</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <div id="loading">Initializing Camera & 3D Engine...</div>
+
+    <div id="ui-container">
+        <h1>Amphora Interactive</h1>
+        
+        <div class="control-group">
+            <label>Templates</label>
+            <button onclick="app.loadShape('amphora')">Amphora Logo</button>
+            <button class="secondary" onclick="app.loadShape('heart')">Heart</button>
+            <button class="secondary" onclick="app.loadShape('saturn')">Saturn</button>
+            <button class="secondary" onclick="app.loadShape('flower')">Flower</button>
+            <button class="secondary" onclick="app.loadShape('buddha')">Meditating Figure</button>
+            <button class="secondary" onclick="app.loadShape('fireworks')">Fireworks</button>
+        </div>
+
+        <div class="control-group">
+            <label>Particle Color</label>
+            <input type="color" id="colorPicker" value="#a29bfe">
+        </div>
+
+        <div class="control-group">
+            <label>Upload Logo (Image)</label>
+            <input type="file" id="imageUpload" accept="image/*" style="color:white; font-size: 10px;">
+        </div>
+    </div>
+
+    <!-- Video feed for MediaPipe -->
+    <video id="video-feed" playsinline autoplay muted></video>
+
+    <!-- Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    
+    <!-- MediaPipe -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
+    <!-- Main Application -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>

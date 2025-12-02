@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amphora Advanced Particle System</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; }
+        
+        /* UI Overlay */
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(10, 10, 15, 0.85);
+            backdrop-filter: blur(12px);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+            color: white;
+            width: 240px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            transition: opacity 0.3s;
+        }
+
+        h1 { font-size: 18px; margin: 0 0 5px 0; color: #a29bfe; font-weight: 700; letter-spacing: 1px; }
+        .subtitle { font-size: 11px; color: #888; margin-bottom: 15px; display: block;}
+        
+        .control-group { margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; }
+        .control-group:last-child { border-bottom: none; }
+        
+        label { display: block; font-size: 11px; color: #bbb; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        button {
+            width: 100%;
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            border: none;
+            padding: 10px;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-bottom: 6px;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        button:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        button.secondary { background: rgba(255,255,255,0.08); }
+        button.secondary:hover { background: rgba(255,255,255,0.15); }
+
+        input[type="color"] { width: 100%; height: 35px; border: none; border-radius: 6px; cursor: pointer; background: none; }
+
+        /* Guide Overlay */
+        .guide-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 12px; color: #ddd; }
+        .guide-icon { width: 20px; height: 20px; background: rgba(255,255,255,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 10px; }
+
+        #video-feed {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 240px;
+            height: 180px;
+            border-radius: 12px;
+            transform: scaleX(-1);
+            opacity: 0.9;
+            border: 2px solid rgba(162, 155, 254, 0.3);
+            object-fit: cover;
+            z-index: 5;
+            background: #000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        #status {
+            position: absolute;
+            top: 20px; right: 20px;
+            color: #a29bfe;
+            font-size: 12px;
+            font-weight: bold;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 10px;
+            border-radius: 20px;
+            pointer-events: none;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            pointer-events: none;
+            transition: opacity 0.5s;
+            text-align: center;
+        }
+        .loader { width: 40px; height: 40px; border: 4px solid #fff; border-top: 4px solid #6c5ce7; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+    
+    <!-- Three.js & MediaPipe -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div id="loading">
+        <div class="loader"></div>
+        <div>Initializing AI Vision...</div>
+    </div>
+
+    <div id="status">Waiting for hands...</div>
+
+    <div id="ui-container">
+        <h1>AMPHORA 2.0</h1>
+        <span class="subtitle">Interactive Physics Engine</span>
+        
+        <div class="control-group">
+            <label>Shapes</label>
+            <button onclick="app.loadShape('amphora')">Amphora Logo</button>
+            <button class="secondary" onclick="app.loadShape('heart')">Heart</button>
+            <button class="secondary" onclick="app.loadShape('saturn')">Saturn</button>
+            <button class="secondary" onclick="app.loadShape('dna')">Double Helix</button>
+            <button class="secondary" onclick="app.loadShape('buddha')">Meditating</button>
+        </div>
+
+        <div class="control-group">
+            <label>Style</label>
+            <input type="color" id="colorPicker" value="#a29bfe">
+            <div style="margin-top:8px">
+                <input type="file" id="imageUpload" accept="image/*" style="display:none">
+                <button class="secondary" onclick="document.getElementById('imageUpload').click()">Upload Custom Image</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>Gesture Guide</label>
+            <div class="guide-item"><div class="guide-icon">↔</div> Open/Close Hands: Scale</div>
+            <div class="guide-item"><div class="guide-icon">↻</div> Steering: Rotate Object</div>
+            <div class="guide-item"><div class="guide-icon">☝</div> Index Finger: Force Field</div>
+            <div class="guide-item"><div class="guide-icon">🤏</div> Pinch: Gravity Well (Attract)</div>
+            <div class="guide-item"><div class="guide-icon">✌</div> Victory Sign: Next Shape</div>
+        </div>
+    </div>
+
+    <video id="video-feed" playsinline></video>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        class ParticleSystem {
+            constructor() {
+                this.scene = new THREE.Scene();
+                this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.z = 40;
+
+                this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                document.body.appendChild(this.renderer.domElement);
+
+                this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableDamping = true;
+                this.controls.dampingFactor = 0.05;
+
+                // Particle State
+                this.particles = null;
+                this.count = 12000;
+                this.basePos = [];     // The target shape positions
+                this.currentPos = [];  // The actual physics positions
+                this.velocities = [];  // Physics velocity
+                this.colors = [];
+                
+                // Interaction State
+                this.handL = null;
+                this.handR = null;
+                this.baseColor = new THREE.Color(0xa29bfe);
+                this.interactionMode = 'neutral'; 
+                
+                // Global transforms (Steering/Levitation)
+                this.globalScale = 1.0;
+                this.globalRotation = 0;
+                this.globalPosition = new THREE.Vector3(0,0,0);
+                
+                // Gestures
+                this.gestureTimer = 0;
+
+                this.initLights();
+                this.loadShape('saturn');
+                this.initListeners();
+                this.animate();
+            }
+
+            initLights() {
+                const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+                this.scene.add(ambient);
+            }
+
+            loadShape(type) {
+                // Cleanup
+                if (this.particles) {
+                    this.scene.remove(this.particles);
+                    this.particles.geometry.dispose();
+                    this.particles.material.dispose();
+                }
+
+                this.basePos = [];
+                this.velocities = [];
+                this.colors = [];
+                
+                let tempPos = [];
+
+                // Generators
+                if (type === 'amphora') {
+                    const img = new Image();
+                    img.src = 'logo.png'; 
+                    img.onload = () => this.processImage(img);
+                    img.onerror = () => this.generateText("Amphora");
+                    return; 
+                } else if (type === 'heart') {
+                    for(let i=0; i<this.count; i++) {
+                        const t = Math.random() * Math.PI * 2;
+                        const x = 16 * Math.pow(Math.sin(t), 3);
+                        const y = 13 * Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(4*t);
+                        const z = (Math.random()-0.5)*4;
+                        tempPos.push(x*0.8, y*0.8, z);
+                    }
+                } else if (type === 'saturn') {
+                    for(let i=0; i<this.count; i++) {
+                        if(i < this.count * 0.3) {
+                            // Planet
+                            const r = 8;
+                            const theta = Math.random() * Math.PI * 2;
+                            const phi = Math.acos(2 * Math.random() - 1);
+                            tempPos.push(r*Math.sin(phi)*Math.cos(theta), r*Math.sin(phi)*Math.sin(theta), r*Math.cos(phi));
+                        } else {
+                            // Rings
+                            const ang = Math.random() * Math.PI * 2;
+                            const rad = 12 + Math.random() * 12;
+                            tempPos.push(Math.cos(ang)*rad, (Math.random()-0.5), Math.sin(ang)*rad);
+                        }
+                    }
+                } else if (type === 'dna') {
+                    for(let i=0; i<this.count; i++) {
+                        const t = (i/this.count) * Math.PI * 20;
+                        const x = Math.cos(t) * 6;
+                        const z = Math.sin(t) * 6;
+                        const y = (i/this.count) * 40 - 20;
+                        // Double helix offset
+                        if (i%2===0) tempPos.push(x, y, z);
+                        else tempPos.push(-x, y, -z);
+                    }
+                } else if (type === 'buddha') {
+                    // Approximate form using spheres
+                    const addSphere = (cx, cy, r, c) => {
+                         for(let k=0; k<c; k++) {
+                            const theta = Math.random()*Math.PI*2;
+                            const phi = Math.acos(2*Math.random()-1);
+                            tempPos.push(cx + r*Math.sin(phi)*Math.cos(theta), cy + r*Math.sin(phi)*Math.sin(theta), r*Math.cos(phi));
+                         }
+                    };
+                    addSphere(0, 6, 3.5, this.count*0.2); // Head
+                    addSphere(0, -2, 7, this.count*0.5); // Body
+                    addSphere(6, -8, 3, this.count*0.15); // Knee R
+                    addSphere(-6, -8, 3, this.count*0.15); // Knee L
+                }
+
+                this.createParticleSystem(tempPos);
+            }
+
+            generateText(text) {
+                const c = document.createElement('canvas');
+                const ctx = c.getContext('2d');
+                c.width = 400; c.height = 200;
+                ctx.font = 'bold 80px Arial';
+                ctx.fillStyle = 'white';
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(text, 200, 100);
+                this.processCanvas(c);
+            }
+
+            processImage(img) {
+                const c = document.createElement('canvas');
+                const ctx = c.getContext('2d');
+                const ratio = img.width/img.height;
+                c.width = 200; c.height = 200/ratio;
+                ctx.drawImage(img, 0, 0, c.width, c.height);
+                this.processCanvas(c);
+            }
+
+            processCanvas(c) {
+                const ctx = c.getContext('2d');
+                const data = ctx.getImageData(0,0,c.width,c.height).data;
+                let tempPos = [];
+                for(let y=0; y<c.height; y+=2) {
+                    for(let x=0; x<c.width; x+=2) {
+                        const i = (y*c.width+x)*4;
+                        if(data[i] > 50) { // If pixel is bright
+                            tempPos.push((x-c.width/2)*0.25, -(y-c.height/2)*0.25, 0);
+                        }
+                    }
+                }
+                this.createParticleSystem(tempPos);
+            }
+
+            createParticleSystem(positions) {
+                // If positions provided are less than count, fill or trim
+                // If generated from image, count might vary.
+                const count = positions.length / 3;
+                this.basePos = new Float32Array(positions);
+                this.currentPos = new Float32Array(positions);
+                this.velocities = new Float32Array(positions.length).fill(0);
+                
+                const geo = new THREE.BufferGeometry();
+                geo.setAttribute('position', new THREE.BufferAttribute(this.currentPos, 3));
+                
+                // Color attribute
+                const colors = [];
+                const c = new THREE.Color();
+                for(let i=0; i<count; i++) {
+                    colors.push(this.baseColor.r, this.baseColor.g, this.baseColor.b);
+                }
+                geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+                const mat = new THREE.PointsMaterial({
+                    size: 0.4,
+                    vertexColors: true,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false,
+                    transparent: true,
+                    opacity: 0.8,
+                    map: new THREE.TextureLoader().load('https://threejs.org/examples/textures/sprites/spark1.png')
+                });
+
+                this.particles = new THREE.Points(geo, mat);
+                this.scene.add(this.particles);
+            }
+
+            updatePhysics() {
+                if (!this.particles) return;
+
+                const positions = this.particles.geometry.attributes.position.array;
+                const colors = this.particles.geometry.attributes.color.array;
+                const count = positions.length / 3;
+
+                // Physics Constants
+                const returnSpeed = 0.08; // How fast they return to shape
+                const friction = 0.90;
+                
+                // Interaction Vectors from Hands
+                let attractors = [];
+                
+                // Define force sources from hands
+                [this.handL, this.handR].forEach(hand => {
+                    if(hand) {
+                        // Map hand 0-1 coords to World Coords approx
+                        const wx = (hand.x - 0.5) * 50; 
+                        const wy = -(hand.y - 0.5) * 35;
+                        const wz = 0; // Hand depth is tricky, assume 0 plane
+                        
+                        // Force Type: Open palm (repel) vs Pinch (attract)
+                        // Pinch value: 0 (open) to 1 (pinched)
+                        const isPinching = hand.pinch > 0.8;
+                        const forceMult = isPinching ? -1.5 : 1.0; // Negative attracts
+
+                        attractors.push({ x:wx, y:wy, z:wz, strength: 20 * forceMult, radius: 15 });
+                    }
+                });
+
+                for (let i = 0; i < count; i++) {
+                    const idx = i * 3;
+
+                    // 1. Calculate Target (Base Shape * Global Scale)
+                    // Apply rotation to base shape here if needed, but we rotate the container mostly
+                    let tx = this.basePos[idx] * this.globalScale;
+                    let ty = this.basePos[idx+1] * this.globalScale;
+                    let tz = this.basePos[idx+2] * this.globalScale;
+
+                    // 2. Spring Force to Target
+                    let ax = (tx - positions[idx]) * returnSpeed;
+                    let ay = (ty - positions[idx+1]) * returnSpeed;
+                    let az = (tz - positions[idx+2]) * returnSpeed;
+
+                    // 3. Interaction Forces (Repel/Attract)
+                    attractors.forEach(att => {
+                        const dx = positions[idx] - att.x;
+                        const dy = positions[idx+1] - att.y;
+                        const dz = positions[idx+2] - att.z;
+                        const distSq = dx*dx + dy*dy + dz*dz;
+                        
+                        if (distSq < att.radius * att.radius) {
+                            const dist = Math.sqrt(distSq);
+                            const force = (1 - dist / att.radius) * att.strength;
+                            const fx = (dx / dist) * force;
+                            const fy = (dy / dist) * force;
+                            const fz = (dz / dist) * force;
+                            
+                            ax += fx;
+                            ay += fy;
+                            az += fz;
+                        }
+                    });
+
+                    // 4. Integrate Velocity
+                    this.velocities[idx] += ax;
+                    this.velocities[idx+1] += ay;
+                    this.velocities[idx+2] += az;
+
+                    this.velocities[idx] *= friction;
+                    this.velocities[idx+1] *= friction;
+                    this.velocities[idx+2] *= friction;
+
+                    // 5. Update Position
+                    positions[idx] += this.velocities[idx];
+                    positions[idx+1] += this.velocities[idx+1];
+                    positions[idx+2] += this.velocities[idx+2];
+
+                    // 6. Dynamic Color (Based on velocity)
+                    const speed = Math.sqrt(this.velocities[idx]**2 + this.velocities[idx+1]**2);
+                    colors[idx] = this.baseColor.r + speed * 2;
+                    colors[idx+1] = this.baseColor.g - speed;
+                    colors[idx+2] = this.baseColor.b + speed;
+                }
+
+                this.particles.geometry.attributes.position.needsUpdate = true;
+                this.particles.geometry.attributes.color.needsUpdate = true;
+                
+                // Global Container Transforms (Steering/Levitation)
+                // Smooth interpolation
+                this.particles.rotation.z += (this.globalRotation - this.particles.rotation.z) * 0.1;
+                this.particles.rotation.x = this.globalPosition.y * 0.05; // Slight tilt
+                this.particles.rotation.y += 0.002; // Auto rotate slow
+
+                this.particles.position.lerp(this.globalPosition, 0.1);
+            }
+
+            animate() {
+                requestAnimationFrame(this.animate.bind(this));
+                this.updatePhysics();
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            initListeners() {
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth/window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+                document.getElementById('colorPicker').addEventListener('input', (e) => {
+                    this.baseColor.set(e.target.value);
+                });
+                document.getElementById('imageUpload').addEventListener('change', (e) => {
+                    if(e.target.files[0]) {
+                        const r = new FileReader();
+                        r.onload = (ev) => {
+                            const img = new Image();
+                            img.src = ev.target.result;
+                            img.onload = () => this.processImage(img);
+                        };
+                        r.readAsDataURL(e.target.files[0]);
+                    }
+                });
+            }
+        }
+
+        const app = new ParticleSystem();
+        window.app = app; // Expose for UI
+
+        // --- AI Vision Logic ---
+        
+        function getDistance(p1, p2) {
+            return Math.sqrt(Math.pow(p1.x-p2.x, 2) + Math.pow(p1.y-p2.y, 2));
+        }
+
+        const shapes = ['amphora', 'heart', 'saturn', 'dna', 'buddha'];
+        let currentShapeIdx = 2;
+        let lastGestureTime = 0;
+
+        function onResults(results) {
+            document.getElementById('loading').style.opacity = 0;
+            const status = document.getElementById('status');
+            
+            if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+                status.innerText = "No hands detected";
+                app.handL = null;
+                app.handR = null;
+                // Reset globals slowly
+                app.globalScale = 1.0;
+                app.globalRotation = 0;
+                app.globalPosition.set(0,0,0);
+                return;
+            }
+
+            const hands = results.multiHandLandmarks;
+            status.innerText = `Hands: ${hands.length} | Tracking Active`;
+
+            let h1 = null, h2 = null;
+
+            // Process Hands
+            hands.forEach((landmarks, index) => {
+                const handedness = results.multiHandedness[index].label; // Left or Right
+                
+                // Calculate Pinch (Index tip to Thumb tip)
+                const pinchDist = getDistance(landmarks[8], landmarks[4]);
+                const isPinch = pinchDist < 0.05 ? 1 : 0; // 1 = fully pinched
+
+                // Detect Victory Sign (Index & Middle up, others down)
+                // Simple heuristic: Tip y < PIP y
+                const isVictory = (
+                    landmarks[8].y < landmarks[6].y && // Index up
+                    landmarks[12].y < landmarks[10].y && // Middle up
+                    landmarks[16].y > landmarks[14].y && // Ring down
+                    landmarks[20].y > landmarks[18].y    // Pinky down
+                );
+
+                if (isVictory && Date.now() - lastGestureTime > 2000) {
+                    currentShapeIdx = (currentShapeIdx + 1) % shapes.length;
+                    app.loadShape(shapes[currentShapeIdx]);
+                    lastGestureTime = Date.now();
+                    status.innerText = "Gesture: Shape Switch!";
+                }
+
+                // Interaction Data Object
+                const handData = {
+                    x: landmarks[8].x, // Use Index tip for interaction
+                    y: landmarks[8].y,
+                    pinch: isPinch
+                };
+
+                if (index === 0) h1 = handData;
+                if (index === 1) h2 = handData;
+            });
+
+            app.handL = h1;
+            app.handR = h2;
+
+            // --- Two Hand Global Interactions ---
+            if (h1 && h2) {
+                // 1. Scale (Distance)
+                const dist = Math.sqrt(Math.pow(h1.x - h2.x, 2) + Math.pow(h1.y - h2.y, 2));
+                app.globalScale = 0.5 + (dist * 4); // Map distance to scale
+
+                // 2. Steering (Rotation)
+                // Calculate angle between hands
+                const angle = Math.atan2(h2.y - h1.y, h2.x - h1.x);
+                app.globalRotation = -angle; // Rotate object
+
+                // 3. Levitation (Position)
+                // Find midpoint
+                const midX = (h1.x + h2.x) / 2;
+                const midY = (h1.y + h2.y) / 2;
+                // Map to world coords (invert Y)
+                app.globalPosition.x = (midX - 0.5) * 30;
+                app.globalPosition.y = -(midY - 0.5) * 20;
+
+            } else {
+                // Single hand defaults
+                app.globalScale = 1.0;
+                app.globalRotation = 0;
+            }
+        }
+
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+        hands.onResults(onResults);
+
+        const video = document.getElementById('video-feed');
+        const camera = new Camera(video, {
+            onFrame: async () => { await hands.send({image: video}); },
+            width: 640, height: 480
+        });
+        camera.start();
+
+    </script>
+</body>
+</html>
