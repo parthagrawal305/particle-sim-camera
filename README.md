@@ -33,3 +33,7 @@ python3 -m http.server 8000
 ```
 
 Camera access needs HTTPS or localhost.
+
+---
+
+<sub>README generated with AI ✨</sub>
